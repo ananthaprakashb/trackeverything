@@ -1,7 +1,4 @@
-// This file is safe for GitHub Pages only when readKey is treated as a low-privilege
-// family dashboard key. Never place member write tokens or Google credentials here.
+// Public browser configuration only. Never add Google client secrets or refresh tokens here.
 window.TRACK_EVERYTHING_CONFIG = {
-  apiUrl: "",
-  familyId: "family-1",
-  readKey: ""
+  apiUrl: ""
 };
