@@ -1,75 +1,116 @@
-const demoData = {
-  generatedAt: new Date().toISOString(),
-  date: new Date().toISOString().slice(0, 10),
-  members: [
-    { memberId: "member-1", name: "Anantha", steps: 8240, goal: 10000, syncedAt: new Date().toISOString() },
-    { memberId: "member-2", name: "Family Member 2", steps: 6350, goal: 8000, syncedAt: new Date().toISOString() },
-    { memberId: "member-3", name: "Family Member 3", steps: 10120, goal: 10000, syncedAt: new Date().toISOString() }
-  ],
-  trend: [
-    { date: "2026-07-27", steps: 20100 },
-    { date: "2026-07-28", steps: 22750 },
-    { date: "2026-07-29", steps: 18920 },
-    { date: "2026-07-30", steps: 25140 },
-    { date: "2026-07-31", steps: 27980 },
-    { date: "2026-08-01", steps: 23860 },
-    { date: "2026-08-02", steps: 24710 }
-  ]
-};
-
 const config = window.TRACK_EVERYTHING_CONFIG || {};
+const SESSION_KEY = 'trackEverythingSession';
+let session = sessionStorage.getItem(SESSION_KEY) || '';
+
 const elements = {
-  familySteps: document.querySelector("#familySteps"),
-  familyGoalProgress: document.querySelector("#familyGoalProgress"),
-  activeMembers: document.querySelector("#activeMembers"),
-  goalsReached: document.querySelector("#goalsReached"),
-  lastSync: document.querySelector("#lastSync"),
-  statusBadge: document.querySelector("#statusBadge"),
-  memberGrid: document.querySelector("#memberGrid"),
-  emptyState: document.querySelector("#emptyState"),
-  trendChart: document.querySelector("#trendChart"),
-  refreshButton: document.querySelector("#refreshButton")
+  authPanel: document.querySelector('#authPanel'),
+  userPanel: document.querySelector('#userPanel'),
+  dashboard: document.querySelector('#dashboard'),
+  loginButton: document.querySelector('#loginButton'),
+  logoutButton: document.querySelector('#logoutButton'),
+  refreshButton: document.querySelector('#refreshButton'),
+  sheetLink: document.querySelector('#sheetLink'),
+  userPicture: document.querySelector('#userPicture'),
+  userName: document.querySelector('#userName'),
+  userEmail: document.querySelector('#userEmail'),
+  familySteps: document.querySelector('#familySteps'),
+  familyGoalProgress: document.querySelector('#familyGoalProgress'),
+  activeMembers: document.querySelector('#activeMembers'),
+  goalsReached: document.querySelector('#goalsReached'),
+  lastSync: document.querySelector('#lastSync'),
+  statusBadge: document.querySelector('#statusBadge'),
+  memberGrid: document.querySelector('#memberGrid'),
+  emptyState: document.querySelector('#emptyState'),
+  trendChart: document.querySelector('#trendChart')
 };
 
 const numberFormatter = new Intl.NumberFormat();
 
-function setStatus(label, isError = false) {
-  elements.statusBadge.textContent = label;
-  elements.statusBadge.classList.toggle("error", isError);
+function api(path) {
+  if (!config.apiUrl) throw new Error('Backend API URL is not configured');
+  return `${String(config.apiUrl).replace(/\/$/, '')}${path}`;
 }
 
-function buildApiUrl() {
-  if (!config.apiUrl) return null;
-  const url = new URL(config.apiUrl);
-  url.searchParams.set("action", "dashboard");
-  if (config.familyId) url.searchParams.set("familyId", config.familyId);
-  if (config.readKey) url.searchParams.set("readKey", config.readKey);
-  return url.toString();
+function captureOAuthSession() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const token = hash.get('session');
+  if (!token) return;
+  session = token;
+  sessionStorage.setItem(SESSION_KEY, token);
+  history.replaceState(null, '', `${location.pathname}${location.search}`);
+}
+
+async function request(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (session) headers.Authorization = `Bearer ${session}`;
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const response = await fetch(api(path), { ...options, headers, cache: 'no-store' });
+  const payload = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    clearSession();
+    showSignedOut();
+  }
+  if (!response.ok || payload.ok === false) throw new Error(payload.error || `Request failed (${response.status})`);
+  return payload.data;
+}
+
+function clearSession() {
+  session = '';
+  sessionStorage.removeItem(SESSION_KEY);
+}
+
+function showSignedOut(message = '') {
+  elements.authPanel.hidden = false;
+  elements.userPanel.hidden = true;
+  elements.dashboard.hidden = true;
+  elements.logoutButton.hidden = true;
+  elements.refreshButton.hidden = true;
+  elements.sheetLink.hidden = true;
+  if (message) elements.authPanel.querySelector('.subtitle').textContent = message;
+}
+
+function showSignedIn(user) {
+  elements.authPanel.hidden = true;
+  elements.userPanel.hidden = false;
+  elements.dashboard.hidden = false;
+  elements.logoutButton.hidden = false;
+  elements.refreshButton.hidden = false;
+  elements.userName.textContent = user.name || 'Google user';
+  elements.userEmail.textContent = user.email || '';
+  elements.userPicture.src = user.picture || '';
+  elements.userPicture.hidden = !user.picture;
+  elements.sheetLink.href = user.spreadsheetUrl;
+  elements.sheetLink.hidden = !user.spreadsheetUrl;
+}
+
+function setStatus(label, isError = false) {
+  elements.statusBadge.textContent = label;
+  elements.statusBadge.classList.toggle('error', isError);
+}
+
+async function initialize() {
+  captureOAuthSession();
+  if (!session) return showSignedOut();
+  try {
+    const user = await request('/api/me');
+    showSignedIn(user);
+    await loadDashboard();
+  } catch (error) {
+    console.error(error);
+    showSignedOut('Your session could not be restored. Sign in again to reconnect your spreadsheet.');
+  }
 }
 
 async function loadDashboard() {
   elements.refreshButton.disabled = true;
-  setStatus("Syncing");
-
+  setStatus('Syncing');
   try {
-    const apiUrl = buildApiUrl();
-    if (!apiUrl) {
-      renderDashboard(demoData);
-      setStatus("Demo data");
-      return;
-    }
-
-    const response = await fetch(apiUrl, { cache: "no-store" });
-    if (!response.ok) throw new Error(`API request failed (${response.status})`);
-    const payload = await response.json();
-    if (!payload.ok) throw new Error(payload.error || "API returned an error");
-
-    renderDashboard(payload.data);
-    setStatus("Live");
+    const data = await request('/api/dashboard');
+    renderDashboard(data);
+    setStatus('Live');
   } catch (error) {
     console.error(error);
-    renderDashboard(demoData);
-    setStatus("API unavailable — demo shown", true);
+    setStatus('Unable to sync', true);
   } finally {
     elements.refreshButton.disabled = false;
   }
@@ -82,76 +123,57 @@ function renderDashboard(data) {
   const goalsReached = members.filter(member => Number(member.steps || 0) >= Number(member.goal || 0)).length;
 
   elements.familySteps.textContent = numberFormatter.format(familySteps);
-  elements.familyGoalProgress.textContent = familyGoal
-    ? `${Math.round((familySteps / familyGoal) * 100)}% of the combined daily goal`
-    : "No family goal configured";
+  elements.familyGoalProgress.textContent = familyGoal ? `${Math.round((familySteps / familyGoal) * 100)}% of the combined daily goal` : 'No family goal configured';
   elements.activeMembers.textContent = numberFormatter.format(members.length);
   elements.goalsReached.textContent = `${goalsReached}/${members.length}`;
   elements.lastSync.textContent = formatTime(data.generatedAt);
-
   renderMembers(members);
   renderTrend(Array.isArray(data.trend) ? data.trend : []);
 }
 
 function renderMembers(members) {
-  elements.memberGrid.innerHTML = "";
+  elements.memberGrid.innerHTML = '';
   elements.emptyState.hidden = members.length > 0;
-
   members.forEach(member => {
     const steps = Number(member.steps || 0);
     const goal = Number(member.goal || 0);
     const percent = goal ? Math.min(100, Math.round((steps / goal) * 100)) : 0;
-    const card = document.createElement("article");
-    card.className = "member-card";
-    card.innerHTML = `
-      <div class="member-row">
-        <h3>${escapeHtml(member.name || member.memberId || "Family member")}</h3>
-        <span class="member-meta">${percent}%</span>
-      </div>
-      <div class="member-steps">${numberFormatter.format(steps)}</div>
-      <div class="progress-track" aria-label="${percent}% of step goal">
-        <div class="progress-bar" style="width:${percent}%"></div>
-      </div>
-      <p class="member-meta">Goal ${numberFormatter.format(goal)} · synced ${formatTime(member.syncedAt)}</p>
-    `;
+    const card = document.createElement('article');
+    card.className = 'member-card';
+    card.innerHTML = `<div class="member-row"><h3>${escapeHtml(member.name || member.memberId || 'Family member')}</h3><span class="member-meta">${percent}%</span></div><div class="member-steps">${numberFormatter.format(steps)}</div><div class="progress-track" aria-label="${percent}% of step goal"><div class="progress-bar" style="width:${percent}%"></div></div><p class="member-meta">Goal ${numberFormatter.format(goal)} · synced ${formatTime(member.syncedAt)}</p>`;
     elements.memberGrid.appendChild(card);
   });
 }
 
 function renderTrend(trend) {
-  elements.trendChart.innerHTML = "";
+  elements.trendChart.innerHTML = '';
+  if (!trend.length) {
+    elements.trendChart.innerHTML = '<p class="empty-state">Trend data will appear after step updates are recorded.</p>';
+    return;
+  }
   const maximum = Math.max(...trend.map(item => Number(item.steps || 0)), 1);
-
   trend.forEach(item => {
     const steps = Number(item.steps || 0);
     const height = Math.max(2, Math.round((steps / maximum) * 100));
     const date = new Date(`${item.date}T12:00:00`);
-    const column = document.createElement("div");
-    column.className = "trend-column";
-    column.innerHTML = `
-      <div class="trend-bar-wrap"><div class="trend-bar" style="height:${height}%"></div></div>
-      <div class="trend-value">${numberFormatter.format(steps)}</div>
-      <div class="trend-label">${date.toLocaleDateString(undefined, { weekday: "short" })}</div>
-    `;
+    const column = document.createElement('div');
+    column.className = 'trend-column';
+    column.innerHTML = `<div class="trend-bar-wrap"><div class="trend-bar" style="height:${height}%"></div></div><div class="trend-value">${numberFormatter.format(steps)}</div><div class="trend-label">${date.toLocaleDateString(undefined, { weekday: 'short' })}</div>`;
     elements.trendChart.appendChild(column);
   });
 }
 
 function formatTime(value) {
-  if (!value) return "—";
+  if (!value) return '—';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-elements.refreshButton.addEventListener("click", loadDashboard);
-loadDashboard();
+elements.loginButton.addEventListener('click', () => { location.href = api('/auth/google'); });
+elements.logoutButton.addEventListener('click', () => { clearSession(); showSignedOut(); });
+elements.refreshButton.addEventListener('click', loadDashboard);
+initialize();
