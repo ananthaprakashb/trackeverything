@@ -170,11 +170,11 @@ async function createUserSpreadsheet(auth, profile) {
     requestBody: {
       properties: { title: `Track Everything - ${profile.name || profile.email}` },
       sheets: [
-        { properties: { title: 'Members', frozenRowCount: 1 }, data: [headerRow(['familyId','memberId','name','dailyGoal','role','active'])] },
-        { properties: { title: 'Steps', frozenRowCount: 1 }, data: [headerRow(['eventId','familyId','memberId','date','steps','source','recordedAt','receivedAt'])] },
-        { properties: { title: 'Tasks', frozenRowCount: 1 }, data: [headerRow(['taskId','title','assignedTo','status','dueDate','priority','createdAt','updatedAt'])] },
-        { properties: { title: 'Expenses', frozenRowCount: 1 }, data: [headerRow(['expenseId','date','category','description','amount','paidBy','createdAt'])] },
-        { properties: { title: 'Savings', frozenRowCount: 1 }, data: [headerRow(['goalId','name','targetAmount','currentAmount','targetDate','updatedAt'])] }
+        { properties: { title: 'Members', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['familyId','memberId','name','dailyGoal','role','active'])] },
+        { properties: { title: 'Steps', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['eventId','familyId','memberId','date','steps','source','recordedAt','receivedAt'])] },
+        { properties: { title: 'Tasks', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['taskId','title','assignedTo','status','dueDate','priority','createdAt','updatedAt'])] },
+        { properties: { title: 'Expenses', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['expenseId','date','category','description','amount','paidBy','createdAt'])] },
+        { properties: { title: 'Savings', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['goalId','name','targetAmount','currentAmount','targetDate','updatedAt'])] }
       ]
     },
     fields: 'spreadsheetId'
