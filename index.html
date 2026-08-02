@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Track Everything family dashboard" />
-  <title>Track Everything — Family Steps</title>
+  <title>Track Everything — Family Hub</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="config.js"></script>
   <script src="assets/app.js" defer></script>
@@ -13,61 +13,56 @@
   <header class="topbar">
     <div>
       <p class="eyebrow">TRACK EVERYTHING</p>
-      <h1>Family Steps</h1>
-      <p class="subtitle">A private, shared view of daily movement and family goals.</p>
+      <h1>Family Hub</h1>
+      <p class="subtitle">Private family tracking powered by a Google Sheet created in your own Google account.</p>
     </div>
-    <button id="refreshButton" class="secondary-button" type="button">Refresh</button>
+    <div class="account-actions">
+      <a id="sheetLink" class="secondary-button" href="#" target="_blank" rel="noreferrer" hidden>Open Sheet</a>
+      <button id="refreshButton" class="secondary-button" type="button" hidden>Refresh</button>
+      <button id="logoutButton" class="secondary-button" type="button" hidden>Sign out</button>
+    </div>
   </header>
 
   <main>
-    <section class="summary-grid" aria-label="Step summary">
-      <article class="metric-card featured">
-        <span>Family steps today</span>
-        <strong id="familySteps">—</strong>
-        <small id="familyGoalProgress">Waiting for data</small>
-      </article>
-      <article class="metric-card">
-        <span>Members active</span>
-        <strong id="activeMembers">—</strong>
-        <small>with a step update today</small>
-      </article>
-      <article class="metric-card">
-        <span>Goals reached</span>
-        <strong id="goalsReached">—</strong>
-        <small>individual daily targets</small>
-      </article>
-      <article class="metric-card">
-        <span>Last sync</span>
-        <strong id="lastSync">—</strong>
-        <small>from the family data API</small>
-      </article>
+    <section id="authPanel" class="panel auth-panel">
+      <div>
+        <p class="eyebrow">GET STARTED</p>
+        <h2>Connect your Google account</h2>
+        <p class="subtitle">We request permission to create and update one Track Everything spreadsheet in your Google Drive. You remain the owner and can revoke access anytime.</p>
+      </div>
+      <button id="loginButton" class="primary-button" type="button">Continue with Google</button>
     </section>
 
-    <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">TODAY</p>
-          <h2>Member progress</h2>
-        </div>
-        <span id="statusBadge" class="status-badge">Loading</span>
+    <section id="userPanel" class="panel user-panel" hidden>
+      <img id="userPicture" class="avatar" alt="" />
+      <div>
+        <p class="eyebrow">SIGNED IN</p>
+        <h2 id="userName">—</h2>
+        <p id="userEmail" class="subtitle">—</p>
       </div>
-      <div id="memberGrid" class="member-grid" aria-live="polite"></div>
-      <p id="emptyState" class="empty-state" hidden>No step data is available yet.</p>
     </section>
 
-    <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <p class="eyebrow">7-DAY VIEW</p>
-          <h2>Family trend</h2>
-        </div>
-      </div>
-      <div id="trendChart" class="trend-chart" role="img" aria-label="Seven-day family step trend"></div>
-    </section>
+    <div id="dashboard" hidden>
+      <section class="summary-grid" aria-label="Step summary">
+        <article class="metric-card featured"><span>Family steps today</span><strong id="familySteps">—</strong><small id="familyGoalProgress">Waiting for data</small></article>
+        <article class="metric-card"><span>Members active</span><strong id="activeMembers">—</strong><small>with a configured profile</small></article>
+        <article class="metric-card"><span>Goals reached</span><strong id="goalsReached">—</strong><small>individual daily targets</small></article>
+        <article class="metric-card"><span>Last sync</span><strong id="lastSync">—</strong><small>from your Google Sheet</small></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">TODAY</p><h2>Member progress</h2></div><span id="statusBadge" class="status-badge">Loading</span></div>
+        <div id="memberGrid" class="member-grid" aria-live="polite"></div>
+        <p id="emptyState" class="empty-state" hidden>No step data is available yet.</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">7-DAY VIEW</p><h2>Family trend</h2></div></div>
+        <div id="trendChart" class="trend-chart" role="img" aria-label="Seven-day family step trend"></div>
+      </section>
+    </div>
   </main>
 
-  <footer>
-    <p>Google Sheet access remains private. This dashboard reads through the Track Everything API only.</p>
-  </footer>
+  <footer><p>Your spreadsheet stays in your Google Drive. Track Everything accesses it only after you grant permission.</p></footer>
 </body>
 </html>
