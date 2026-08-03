@@ -10,8 +10,8 @@ for (const name of requiredEnv) if (!process.env[name]) throw new Error(`${name}
 
 const tokenEncryptionKey = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY, 'base64');
 if (tokenEncryptionKey.length !== 32) throw new Error('TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
-
 if (!admin.apps.length) admin.initializeApp();
+
 const db = admin.firestore();
 const app = express();
 app.disable('x-powered-by');
@@ -20,8 +20,9 @@ app.use(express.json({ limit: '100kb' }));
 
 const oauth2Client = () => new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
 const scopes = ['openid','email','profile','https://www.googleapis.com/auth/drive.file'];
+const sheetsApi = auth => google.sheets({ version: 'v4', auth });
 
-app.get('/health', (_req, res) => res.json({ ok: true, oauthScope: 'drive.file' }));
+app.get('/health', (_req, res) => res.json({ ok: true, oauthScope: 'drive.file', membershipLookup: 'direct' }));
 
 app.get('/auth/google', async (_req, res, next) => {
   try {
@@ -31,11 +32,12 @@ app.get('/auth/google', async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get('/auth/google/callback', async (req, res, next) => {
+app.get('/auth/google/callback', async (req, res) => {
   try {
     if (req.query.error) return redirectWithError(res, `Google sign-in was not completed: ${String(req.query.error)}`);
     const { code, state } = req.query;
     if (!code || !state) return redirectWithError(res, 'Missing OAuth code or state');
+
     const stateRef = db.collection('oauthStates').doc(String(state));
     const stateDoc = await stateRef.get();
     if (!stateDoc.exists) return redirectWithError(res, 'Invalid or expired OAuth state');
@@ -53,32 +55,43 @@ app.get('/auth/google/callback', async (req, res, next) => {
     const userRef = db.collection('users').doc(profile.id);
     const existing = await userRef.get();
     const existingData = existing.exists ? existing.data() : {};
-    const priorRefreshToken = existingData.refreshTokenEncrypted ? decryptToken(existingData.refreshTokenEncrypted) : null;
-    const refreshToken = tokens.refresh_token || priorRefreshToken;
-    if (!refreshToken) return redirectWithError(res, 'Google did not return offline access. Revoke the app and sign in again.');
+    const oldRefresh = existingData.refreshTokenEncrypted ? decryptToken(existingData.refreshTokenEncrypted) : null;
+    const refreshToken = tokens.refresh_token || oldRefresh;
+    if (!refreshToken) return redirectWithError(res, 'Google did not return offline access. Revoke Track Everything and sign in again.');
 
     let membership = await findMembership(email);
     let group;
-    if (membership) group = await getGroup(membership.groupId);
-    else if (existingData.groupId) {
+    if (membership?.groupId) {
+      group = await getGroup(membership.groupId);
+    } else if (existingData.groupId) {
       group = await getGroup(existingData.groupId);
       membership = { groupId: group.id, role: existingData.role || 'member', name: profile.name || email };
+      await saveMemberLookup(email, membership);
     } else {
       group = await createGroup(client, profile);
       membership = { groupId: group.id, role: 'admin', name: profile.name || email };
     }
 
     await userRef.set({
-      email, name: profile.name || email, picture: profile.picture || null,
-      refreshTokenEncrypted: encryptToken(refreshToken), groupId: group.id,
-      role: membership.role, spreadsheetId: group.spreadsheetId,
+      email,
+      name: profile.name || email,
+      picture: profile.picture || null,
+      refreshTokenEncrypted: encryptToken(refreshToken),
+      groupId: group.id,
+      role: membership.role,
+      spreadsheetId: group.spreadsheetId,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
     await db.collection('groups').doc(group.id).collection('members').doc(email).set({
-      email, name: profile.name || membership.name || email, userId: profile.id,
-      role: membership.role, status: 'active', updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      email,
+      name: profile.name || membership.name || email,
+      userId: profile.id,
+      role: membership.role,
+      status: 'active',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+    await saveMemberLookup(email, { groupId: group.id, role: membership.role, name: profile.name || membership.name || email });
 
     if (membership.role !== 'admin') await shareSpreadsheetWithMember(group, email);
 
@@ -88,7 +101,10 @@ app.get('/auth/google/callback', async (req, res, next) => {
     const redirect = new URL(process.env.APP_ORIGIN);
     redirect.hash = new URLSearchParams({ session, connected: '1' }).toString();
     res.redirect(redirect.toString());
-  } catch (error) { next(error); }
+  } catch (error) {
+    console.error('OAuth callback failed', error);
+    return redirectWithError(res, readableError(error));
+  }
 });
 
 app.get('/api/me', requireSession, async (req, res, next) => {
@@ -135,14 +151,14 @@ app.post('/api/group/members', requireSession, requireAdmin, async (req, res, ne
     const existing = await memberRef.get();
     if (!existing.exists) {
       await sheetsApi(context.auth).spreadsheets.values.append({
-        spreadsheetId: context.group.spreadsheetId, range: 'Members!A:F', valueInputOption: 'RAW',
+        spreadsheetId: context.group.spreadsheetId,
+        range: 'Members!A:F', valueInputOption: 'RAW',
         requestBody: { values: [[context.group.id, email, name, dailyGoal, 'member', true]] }
       });
     }
-    await memberRef.set({
-      email, name, role: existing.data()?.role || 'member', status: existing.data()?.status || 'invited', dailyGoal,
-      invitedBy: req.user.email, updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    const role = existing.data()?.role || 'member';
+    await memberRef.set({ email, name, role, status: existing.data()?.status || 'invited', dailyGoal, invitedBy: req.user.email, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    await saveMemberLookup(email, { groupId: context.group.id, role, name });
     await shareSpreadsheetWithMember(context.group, email, context.auth);
     res.status(existing.exists ? 200 : 201).json({ ok: true, data: { email, name, dailyGoal, sheetShared: true } });
   } catch (error) { next(error); }
@@ -199,15 +215,9 @@ app.post('/api/projects/:projectId/entries', requireSession, async (req, res, ne
     const sheets = sheetsApi(context.auth);
 
     if (project.sheetTitle === 'Steps' || project.type === 'steps') {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: context.group.spreadsheetId, range: 'Steps!A:H', valueInputOption: 'RAW',
-        requestBody: { values: [[entryId, context.group.id, req.user.email, date, Math.round(value), notes || 'project-web', now, now]] }
-      });
+      await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: 'Steps!A:H', valueInputOption: 'RAW', requestBody: { values: [[entryId, context.group.id, req.user.email, date, Math.round(value), notes || 'project-web', now, now]] } });
     } else {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: context.group.spreadsheetId, range: `'${escapeSheetTitle(project.sheetTitle)}'!A:G`, valueInputOption: 'RAW',
-        requestBody: { values: [[entryId, req.user.email, date, value, notes, req.user.email, now]] }
-      });
+      await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: `'${escapeSheetTitle(project.sheetTitle)}'!A:G`, valueInputOption: 'RAW', requestBody: { values: [[entryId, req.user.email, date, value, notes, req.user.email, now]] } });
     }
     res.status(201).json({ ok: true, data: { entryId, projectId: project.projectId, value, date } });
   } catch (error) { next(error); }
@@ -224,23 +234,19 @@ app.post('/api/steps', requireSession, async (req, res, next) => {
     const sheets = sheetsApi(context.auth);
     const existing = await sheets.spreadsheets.values.get({ spreadsheetId: context.group.spreadsheetId, range: 'Steps!A:A' });
     if ((existing.data.values || []).some(row => row[0] === eventId)) return res.json({ ok: true, data: { eventId, steps, duplicate: true } });
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: context.group.spreadsheetId, range: 'Steps!A:H', valueInputOption: 'RAW',
-      requestBody: { values: [[eventId, context.group.id, req.user.email, date, steps, String(req.body.source || 'web').slice(0, 80), now, now]] }
-    });
+    await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: 'Steps!A:H', valueInputOption: 'RAW', requestBody: { values: [[eventId, context.group.id, req.user.email, date, steps, String(req.body.source || 'web').slice(0, 80), now, now]] } });
     res.status(201).json({ ok: true, data: { eventId, steps, duplicate: false } });
   } catch (error) { next(error); }
 });
 
 async function createGroup(auth, profile) {
   const groupId = crypto.randomUUID();
+  const ownerEmail = normalizeEmail(profile.email);
   const spreadsheetId = await createGroupSpreadsheet(auth, profile, groupId);
-  const group = { name: `${profile.name || profile.email}'s Group`, ownerUserId: profile.id, ownerEmail: normalizeEmail(profile.email), spreadsheetId, createdAt: admin.firestore.FieldValue.serverTimestamp() };
+  const group = { name: `${profile.name || profile.email}'s Group`, ownerUserId: profile.id, ownerEmail, spreadsheetId, createdAt: admin.firestore.FieldValue.serverTimestamp() };
   await db.collection('groups').doc(groupId).set(group);
-  await db.collection('groups').doc(groupId).collection('members').doc(normalizeEmail(profile.email)).set({
-    email: normalizeEmail(profile.email), name: profile.name || profile.email, userId: profile.id, role: 'admin', status: 'active', dailyGoal: 10000,
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
-  });
+  await db.collection('groups').doc(groupId).collection('members').doc(ownerEmail).set({ email: ownerEmail, name: profile.name || profile.email, userId: profile.id, role: 'admin', status: 'active', dailyGoal: 10000, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+  await saveMemberLookup(ownerEmail, { groupId, role: 'admin', name: profile.name || profile.email });
   return { id: groupId, ...group };
 }
 
@@ -265,26 +271,29 @@ async function createGroupSpreadsheet(auth, profile, groupId) {
   return spreadsheetId;
 }
 
+async function findMembership(email) {
+  const doc = await db.collection('memberLookup').doc(normalizeEmail(email)).get();
+  return doc.exists ? doc.data() : null;
+}
+
+async function saveMemberLookup(email, membership) {
+  await db.collection('memberLookup').doc(normalizeEmail(email)).set({
+    email: normalizeEmail(email),
+    groupId: membership.groupId,
+    role: membership.role || 'member',
+    name: membership.name || normalizeEmail(email),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
 async function shareSpreadsheetWithMember(group, email, suppliedAuth = null) {
   if (normalizeEmail(email) === normalizeEmail(group.ownerEmail)) return;
   const auth = suppliedAuth || authorizedClient((await getUser(group.ownerUserId)).refreshTokenEncrypted);
-  const drive = google.drive({ version: 'v3', auth });
   try {
-    await drive.permissions.create({
-      fileId: group.spreadsheetId, sendNotificationEmail: true,
-      requestBody: { type: 'user', role: 'writer', emailAddress: email },
-      fields: 'id'
-    });
+    await google.drive({ version: 'v3', auth }).permissions.create({ fileId: group.spreadsheetId, sendNotificationEmail: true, requestBody: { type: 'user', role: 'writer', emailAddress: email }, fields: 'id' });
   } catch (error) {
-    if (![403,409].includes(error?.code) && !String(error?.message || '').includes('already')) throw error;
+    if (![403,409].includes(Number(error?.code)) && !String(error?.message || '').toLowerCase().includes('already')) throw error;
   }
-}
-
-async function findMembership(email) {
-  const snapshot = await db.collectionGroup('members').where('email', '==', email).limit(1).get();
-  if (snapshot.empty) return null;
-  const doc = snapshot.docs[0];
-  return { groupId: doc.ref.parent.parent.id, ...doc.data() };
 }
 
 async function getGroupContext(userId) {
@@ -301,9 +310,8 @@ async function findProject(context, projectId) {
   return project;
 }
 
-function sheetsApi(auth) { return google.sheets({ version: 'v4', auth }); }
-function headerRow(headers) { return { rowData: [{ values: headers.map(value => ({ userEnteredValue: { stringValue: value } })) }] }; }
 function authorizedClient(encryptedRefreshToken) { const client = oauth2Client(); client.setCredentials({ refresh_token: decryptToken(encryptedRefreshToken) }); return client; }
+function headerRow(headers) { return { rowData: [{ values: headers.map(value => ({ userEnteredValue: { stringValue: value } })) }] }; }
 function encryptToken(value) { const iv = crypto.randomBytes(12); const cipher = crypto.createCipheriv('aes-256-gcm', tokenEncryptionKey, iv); const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]); return [iv.toString('base64'), cipher.getAuthTag().toString('base64'), ciphertext.toString('base64')].join('.'); }
 function decryptToken(value) { const [ivValue, tagValue, encryptedValue] = String(value || '').split('.'); if (!ivValue || !tagValue || !encryptedValue) throw Object.assign(new Error('Stored Google authorization is invalid'), { statusCode: 401 }); const decipher = crypto.createDecipheriv('aes-256-gcm', tokenEncryptionKey, Buffer.from(ivValue, 'base64')); decipher.setAuthTag(Buffer.from(tagValue, 'base64')); return Buffer.concat([decipher.update(Buffer.from(encryptedValue, 'base64')), decipher.final()]).toString('utf8'); }
 async function getUser(id) { const doc = await db.collection('users').doc(id).get(); if (!doc.exists) throw Object.assign(new Error('User is not provisioned'), { statusCode: 404 }); return { id: doc.id, ...doc.data() }; }
@@ -328,33 +336,37 @@ function buildDashboard(valueRanges) {
   const members = (valueRanges[0]?.values || []).map(row => ({ memberId: row[1], name: row[2], goal: Number(row[3] || 10000), active: String(row[5]).toLowerCase() !== 'false' }));
   const rows = valueRanges[1]?.values || [];
   const dates = lastDates(7);
-  const latestByDateMember = new Map();
+  const latest = new Map();
   for (const row of rows) {
     const date = String(row[3] || ''), memberId = String(row[2] || '');
     if (!dates.includes(date) || !memberId) continue;
-    const key = `${date}:${memberId}`, previous = latestByDateMember.get(key);
-    if (!previous || String(row[6]) > String(previous[6])) latestByDateMember.set(key, row);
+    const key = `${date}:${memberId}`, previous = latest.get(key);
+    if (!previous || String(row[6]) > String(previous[6])) latest.set(key, row);
   }
-  const today = dates[dates.length - 1];
+  const today = dates.at(-1);
   return {
     generatedAt: new Date().toISOString(), date: today,
-    members: members.filter(member => member.active).map(member => { const row = latestByDateMember.get(`${today}:${member.memberId}`); return { ...member, steps: Number(row?.[4] || 0), syncedAt: row?.[7] || row?.[6] || null }; }),
-    trend: dates.map(date => ({ date, steps: members.reduce((sum, member) => sum + Number(latestByDateMember.get(`${date}:${member.memberId}`)?.[4] || 0), 0) }))
+    members: members.filter(member => member.active).map(member => { const row = latest.get(`${today}:${member.memberId}`); return { ...member, steps: Number(row?.[4] || 0), syncedAt: row?.[7] || row?.[6] || null }; }),
+    trend: dates.map(date => ({ date, steps: members.reduce((sum, member) => sum + Number(latest.get(`${date}:${member.memberId}`)?.[4] || 0), 0) }))
   };
 }
 
 function buildProjects(rows) { return rows.filter(row => String(row[6] || 'active') !== 'archived').map(row => ({ projectId: row[0], name: row[1], type: row[2], sheetTitle: row[3], createdBy: row[4], createdAt: row[5], status: row[6] || 'active' })); }
-function buildProjectEntries(project, rows) {
-  if (project.sheetTitle === 'Steps') return rows.map(row => ({ entryId: row[0], memberEmail: row[2], date: row[3], value: Number(row[4] || 0), notes: row[5], updatedAt: row[7] || row[6] }));
-  return rows.map(row => ({ entryId: row[0], memberEmail: row[1], date: row[2], value: Number(row[3] || 0), notes: row[4], createdBy: row[5], updatedAt: row[6] }));
-}
-function uniqueSheetTitle(name, existingTitles) { const base = String(name).replace(/[\\/?*[\]:]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Project'; let title = base, counter = 2; while (existingTitles.has(title)) { title = `${base.slice(0, 75)} ${counter}`; counter += 1; } return title; }
+function buildProjectEntries(project, rows) { return project.sheetTitle === 'Steps' ? rows.map(row => ({ entryId: row[0], memberEmail: row[2], date: row[3], value: Number(row[4] || 0), notes: row[5], updatedAt: row[7] || row[6] })) : rows.map(row => ({ entryId: row[0], memberEmail: row[1], date: row[2], value: Number(row[3] || 0), notes: row[4], createdBy: row[5], updatedAt: row[6] })); }
+function uniqueSheetTitle(name, existingTitles) { const base = String(name).replace(/[\\/?*[\]:]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Project'; let title = base, counter = 2; while (existingTitles.has(title)) title = `${base.slice(0, 75)} ${counter++}`; return title; }
 function escapeSheetTitle(value) { return String(value).replaceAll("'", "''"); }
 function normalizeEmail(value) { return String(value || '').trim().toLowerCase(); }
 function isValidEmail(value) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
 function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')); }
-function lastDates(count) { const dates = []; for (let offset = count - 1; offset >= 0; offset -= 1) { const date = new Date(); date.setUTCDate(date.getUTCDate() - offset); dates.push(date.toISOString().slice(0, 10)); } return dates; }
+function lastDates(count) { const dates = []; for (let offset = count - 1; offset >= 0; offset--) { const date = new Date(); date.setUTCDate(date.getUTCDate() - offset); dates.push(date.toISOString().slice(0, 10)); } return dates; }
 function redirectWithError(res, message) { const redirect = new URL(process.env.APP_ORIGIN); redirect.hash = new URLSearchParams({ oauth_error: message }).toString(); return res.redirect(redirect.toString()); }
+function readableError(error) { return error?.response?.data?.error?.message || error?.response?.data?.error_description || error?.message || 'Unexpected sign-in error'; }
 
-app.use((error, _req, res, _next) => { console.error(error); res.status(error.statusCode || error.code || 500).json({ ok: false, error: error.message || 'Unexpected error' }); });
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  const candidate = Number(error?.statusCode || error?.response?.status || 500);
+  const status = candidate >= 400 && candidate <= 599 ? candidate : 500;
+  res.status(status).json({ ok: false, error: readableError(error) });
+});
+
 app.listen(process.env.PORT || 8080, () => console.log('Track Everything API started'));
