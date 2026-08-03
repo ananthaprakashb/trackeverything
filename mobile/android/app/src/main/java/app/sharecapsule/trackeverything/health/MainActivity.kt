@@ -7,7 +7,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContract
 import androidx.appcompat.app.AppCompatActivity
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
@@ -160,7 +159,7 @@ class MainActivity : AppCompatActivity() {
                 connection.readTimeout = 15_000
 
                 val payload = JSONObject()
-                    .put("eventId", "health-connect:$date")
+                    .put("eventId", "health-connect:$date:$steps")
                     .put("date", date)
                     .put("steps", steps)
                     .put("source", "android-health-connect")
