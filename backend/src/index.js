@@ -14,15 +14,16 @@ if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
 const app = express();
+const appOrigin = new URL(process.env.APP_ORIGIN).origin;
 app.disable('x-powered-by');
-app.use(cors({ origin: process.env.APP_ORIGIN, methods: ['GET','POST','PATCH','DELETE'], allowedHeaders: ['Content-Type','Authorization'] }));
+app.use(cors({ origin: appOrigin, methods: ['GET','POST','PATCH','DELETE'], allowedHeaders: ['Content-Type','Authorization'] }));
 app.use(express.json({ limit: '100kb' }));
 
 const oauth2Client = () => new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
 const scopes = ['openid','email','profile','https://www.googleapis.com/auth/drive.file'];
 const sheetsApi = auth => google.sheets({ version: 'v4', auth });
 
-app.get('/health', (_req, res) => res.json({ ok: true, oauthScope: 'drive.file', membershipLookup: 'direct' }));
+app.get('/health', (_req, res) => res.json({ ok: true, oauthScope: 'drive.file', membershipLookup: 'direct', corsOrigin: appOrigin }));
 
 app.get('/auth/google', async (_req, res, next) => {
   try {
@@ -98,7 +99,7 @@ app.get('/auth/google/callback', async (req, res) => {
     const session = jwt.sign({ sub: profile.id, email, groupId: group.id, role: membership.role }, process.env.SESSION_SECRET, {
       expiresIn: '1h', issuer: 'track-everything', audience: 'track-everything-web'
     });
-    const redirect = new URL(process.env.APP_ORIGIN);
+    const redirect = new URL(appOrigin);
     redirect.hash = new URLSearchParams({ session, connected: '1' }).toString();
     res.redirect(redirect.toString());
   } catch (error) {
@@ -118,15 +119,8 @@ app.get('/api/me', requireSession, async (req, res, next) => {
 app.get('/api/dashboard', requireSession, async (req, res, next) => {
   try {
     const context = await getGroupContext(req.user.sub);
-    const response = await sheetsApi(context.auth).spreadsheets.values.batchGet({
-      spreadsheetId: context.group.spreadsheetId,
-      ranges: ['Members!A2:F','Steps!A2:H','Projects!A2:G']
-    });
-    res.json({ ok: true, data: {
-      ...buildDashboard(response.data.valueRanges || []),
-      group: { id: context.group.id, name: context.group.name, role: context.user.role },
-      projects: buildProjects(response.data.valueRanges?.[2]?.values || [])
-    } });
+    const response = await sheetsApi(context.auth).spreadsheets.values.batchGet({ spreadsheetId: context.group.spreadsheetId, ranges: ['Members!A2:F','Steps!A2:H','Projects!A2:G'] });
+    res.json({ ok: true, data: { ...buildDashboard(response.data.valueRanges || []), group: { id: context.group.id, name: context.group.name, role: context.user.role }, projects: buildProjects(response.data.valueRanges?.[2]?.values || []) } });
   } catch (error) { next(error); }
 });
 
@@ -146,16 +140,9 @@ app.post('/api/group/members', requireSession, requireAdmin, async (req, res, ne
     const dailyGoal = Number(req.body.dailyGoal || 10000);
     if (!isValidEmail(email)) return res.status(400).json({ ok: false, error: 'A valid member email is required' });
     if (!Number.isInteger(dailyGoal) || dailyGoal < 1 || dailyGoal > 100000) return res.status(400).json({ ok: false, error: 'dailyGoal must be an integer from 1 to 100000' });
-
     const memberRef = db.collection('groups').doc(context.group.id).collection('members').doc(email);
     const existing = await memberRef.get();
-    if (!existing.exists) {
-      await sheetsApi(context.auth).spreadsheets.values.append({
-        spreadsheetId: context.group.spreadsheetId,
-        range: 'Members!A:F', valueInputOption: 'RAW',
-        requestBody: { values: [[context.group.id, email, name, dailyGoal, 'member', true]] }
-      });
-    }
+    if (!existing.exists) await sheetsApi(context.auth).spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: 'Members!A:F', valueInputOption: 'RAW', requestBody: { values: [[context.group.id, email, name, dailyGoal, 'member', true]] } });
     const role = existing.data()?.role || 'member';
     await memberRef.set({ email, name, role, status: existing.data()?.status || 'invited', dailyGoal, invitedBy: req.user.email, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     await saveMemberLookup(email, { groupId: context.group.id, role, name });
@@ -171,22 +158,14 @@ app.post('/api/projects', requireSession, async (req, res, next) => {
     const type = String(req.body.type || 'general').trim().toLowerCase().slice(0, 30);
     if (!name) return res.status(400).json({ ok: false, error: 'Project name is required' });
     if (!['general','steps','percentage','count'].includes(type)) return res.status(400).json({ ok: false, error: 'Unsupported project type' });
-
     const sheets = sheetsApi(context.auth);
     const metadata = await sheets.spreadsheets.get({ spreadsheetId: context.group.spreadsheetId, fields: 'sheets.properties.title' });
     const sheetTitle = uniqueSheetTitle(name, new Set((metadata.data.sheets || []).map(sheet => sheet.properties?.title)));
     const projectId = crypto.randomUUID();
     const now = new Date().toISOString();
     await sheets.spreadsheets.batchUpdate({ spreadsheetId: context.group.spreadsheetId, requestBody: { requests: [{ addSheet: { properties: { title: sheetTitle, gridProperties: { frozenRowCount: 1 } } } }] } });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: context.group.spreadsheetId,
-      range: `'${escapeSheetTitle(sheetTitle)}'!A1:G1`, valueInputOption: 'RAW',
-      requestBody: { values: [['entryId','memberEmail','date','value','notes','createdBy','updatedAt']] }
-    });
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: context.group.spreadsheetId, range: 'Projects!A:G', valueInputOption: 'RAW',
-      requestBody: { values: [[projectId, name, type, sheetTitle, req.user.email, now, 'active']] }
-    });
+    await sheets.spreadsheets.values.update({ spreadsheetId: context.group.spreadsheetId, range: `'${escapeSheetTitle(sheetTitle)}'!A1:G1`, valueInputOption: 'RAW', requestBody: { values: [['entryId','memberEmail','date','value','notes','createdBy','updatedAt']] } });
+    await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: 'Projects!A:G', valueInputOption: 'RAW', requestBody: { values: [[projectId, name, type, sheetTitle, req.user.email, now, 'active']] } });
     res.status(201).json({ ok: true, data: { projectId, name, type, sheetTitle } });
   } catch (error) { next(error); }
 });
@@ -213,12 +192,8 @@ app.post('/api/projects/:projectId/entries', requireSession, async (req, res, ne
     const entryId = crypto.randomUUID();
     const now = new Date().toISOString();
     const sheets = sheetsApi(context.auth);
-
-    if (project.sheetTitle === 'Steps' || project.type === 'steps') {
-      await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: 'Steps!A:H', valueInputOption: 'RAW', requestBody: { values: [[entryId, context.group.id, req.user.email, date, Math.round(value), notes || 'project-web', now, now]] } });
-    } else {
-      await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: `'${escapeSheetTitle(project.sheetTitle)}'!A:G`, valueInputOption: 'RAW', requestBody: { values: [[entryId, req.user.email, date, value, notes, req.user.email, now]] } });
-    }
+    if (project.sheetTitle === 'Steps' || project.type === 'steps') await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: 'Steps!A:H', valueInputOption: 'RAW', requestBody: { values: [[entryId, context.group.id, req.user.email, date, Math.round(value), notes || 'project-web', now, now]] } });
+    else await sheets.spreadsheets.values.append({ spreadsheetId: context.group.spreadsheetId, range: `'${escapeSheetTitle(project.sheetTitle)}'!A:G`, valueInputOption: 'RAW', requestBody: { values: [[entryId, req.user.email, date, value, notes, req.user.email, now]] } });
     res.status(201).json({ ok: true, data: { entryId, projectId: project.projectId, value, date } });
   } catch (error) { next(error); }
 });
@@ -252,16 +227,11 @@ async function createGroup(auth, profile) {
 
 async function createGroupSpreadsheet(auth, profile, groupId) {
   const sheets = sheetsApi(auth);
-  const created = await sheets.spreadsheets.create({
-    requestBody: {
-      properties: { title: `Track Everything - ${profile.name || profile.email}` },
-      sheets: [
-        { properties: { title: 'Members', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['familyId','memberId','name','dailyGoal','role','active'])] },
-        { properties: { title: 'Projects', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['projectId','name','type','sheetTitle','createdBy','createdAt','status'])] },
-        { properties: { title: 'Steps', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['eventId','familyId','memberId','date','steps','source','recordedAt','receivedAt'])] }
-      ]
-    }, fields: 'spreadsheetId'
-  });
+  const created = await sheets.spreadsheets.create({ requestBody: { properties: { title: `Track Everything - ${profile.name || profile.email}` }, sheets: [
+    { properties: { title: 'Members', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['familyId','memberId','name','dailyGoal','role','active'])] },
+    { properties: { title: 'Projects', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['projectId','name','type','sheetTitle','createdBy','createdAt','status'])] },
+    { properties: { title: 'Steps', gridProperties: { frozenRowCount: 1 } }, data: [headerRow(['eventId','familyId','memberId','date','steps','source','recordedAt','receivedAt'])] }
+  ] }, fields: 'spreadsheetId' });
   const spreadsheetId = created.data.spreadsheetId;
   const now = new Date().toISOString();
   await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data: [
@@ -271,44 +241,16 @@ async function createGroupSpreadsheet(auth, profile, groupId) {
   return spreadsheetId;
 }
 
-async function findMembership(email) {
-  const doc = await db.collection('memberLookup').doc(normalizeEmail(email)).get();
-  return doc.exists ? doc.data() : null;
-}
-
-async function saveMemberLookup(email, membership) {
-  await db.collection('memberLookup').doc(normalizeEmail(email)).set({
-    email: normalizeEmail(email),
-    groupId: membership.groupId,
-    role: membership.role || 'member',
-    name: membership.name || normalizeEmail(email),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-}
-
+async function findMembership(email) { const doc = await db.collection('memberLookup').doc(normalizeEmail(email)).get(); return doc.exists ? doc.data() : null; }
+async function saveMemberLookup(email, membership) { await db.collection('memberLookup').doc(normalizeEmail(email)).set({ email: normalizeEmail(email), groupId: membership.groupId, role: membership.role || 'member', name: membership.name || normalizeEmail(email), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }); }
 async function shareSpreadsheetWithMember(group, email, suppliedAuth = null) {
   if (normalizeEmail(email) === normalizeEmail(group.ownerEmail)) return;
   const auth = suppliedAuth || authorizedClient((await getUser(group.ownerUserId)).refreshTokenEncrypted);
-  try {
-    await google.drive({ version: 'v3', auth }).permissions.create({ fileId: group.spreadsheetId, sendNotificationEmail: true, requestBody: { type: 'user', role: 'writer', emailAddress: email }, fields: 'id' });
-  } catch (error) {
-    if (![403,409].includes(Number(error?.code)) && !String(error?.message || '').toLowerCase().includes('already')) throw error;
-  }
+  try { await google.drive({ version: 'v3', auth }).permissions.create({ fileId: group.spreadsheetId, sendNotificationEmail: true, requestBody: { type: 'user', role: 'writer', emailAddress: email }, fields: 'id' }); }
+  catch (error) { if (![403,409].includes(Number(error?.code)) && !String(error?.message || '').toLowerCase().includes('already')) throw error; }
 }
-
-async function getGroupContext(userId) {
-  const user = await getUser(userId);
-  const group = await getGroup(user.groupId);
-  const owner = await getUser(group.ownerUserId);
-  return { user, group, owner, auth: authorizedClient(owner.refreshTokenEncrypted) };
-}
-
-async function findProject(context, projectId) {
-  const result = await sheetsApi(context.auth).spreadsheets.values.get({ spreadsheetId: context.group.spreadsheetId, range: 'Projects!A2:G' });
-  const project = buildProjects(result.data.values || []).find(item => item.projectId === String(projectId));
-  if (!project) throw Object.assign(new Error('Project not found'), { statusCode: 404 });
-  return project;
-}
+async function getGroupContext(userId) { const user = await getUser(userId); const group = await getGroup(user.groupId); const owner = await getUser(group.ownerUserId); return { user, group, owner, auth: authorizedClient(owner.refreshTokenEncrypted) }; }
+async function findProject(context, projectId) { const result = await sheetsApi(context.auth).spreadsheets.values.get({ spreadsheetId: context.group.spreadsheetId, range: 'Projects!A2:G' }); const project = buildProjects(result.data.values || []).find(item => item.projectId === String(projectId)); if (!project) throw Object.assign(new Error('Project not found'), { statusCode: 404 }); return project; }
 
 function authorizedClient(encryptedRefreshToken) { const client = oauth2Client(); client.setCredentials({ refresh_token: decryptToken(encryptedRefreshToken) }); return client; }
 function headerRow(headers) { return { rowData: [{ values: headers.map(value => ({ userEnteredValue: { stringValue: value } })) }] }; }
@@ -317,40 +259,10 @@ function decryptToken(value) { const [ivValue, tagValue, encryptedValue] = Strin
 async function getUser(id) { const doc = await db.collection('users').doc(id).get(); if (!doc.exists) throw Object.assign(new Error('User is not provisioned'), { statusCode: 404 }); return { id: doc.id, ...doc.data() }; }
 async function getGroup(id) { if (!id) throw Object.assign(new Error('User is not assigned to a group'), { statusCode: 409 }); const doc = await db.collection('groups').doc(id).get(); if (!doc.exists) throw Object.assign(new Error('Group is not provisioned'), { statusCode: 404 }); return { id: doc.id, ...doc.data() }; }
 function publicUser(user, group) { return { id: user.id, name: user.name, email: user.email, picture: user.picture, role: user.role, groupId: group.id, groupName: group.name, spreadsheetId: group.spreadsheetId, spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${group.spreadsheetId}` }; }
+function requireSession(req, res, next) { try { const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''); if (!token) return res.status(401).json({ ok: false, error: 'Authentication required' }); req.user = jwt.verify(token, process.env.SESSION_SECRET, { issuer: 'track-everything', audience: 'track-everything-web' }); next(); } catch (_) { res.status(401).json({ ok: false, error: 'Session expired or invalid' }); } }
+async function requireAdmin(req, res, next) { try { const user = await getUser(req.user.sub); if (user.role !== 'admin') return res.status(403).json({ ok: false, error: 'Group admin access is required' }); next(); } catch (error) { next(error); } }
 
-function requireSession(req, res, next) {
-  try {
-    const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (!token) return res.status(401).json({ ok: false, error: 'Authentication required' });
-    req.user = jwt.verify(token, process.env.SESSION_SECRET, { issuer: 'track-everything', audience: 'track-everything-web' });
-    next();
-  } catch (_) { res.status(401).json({ ok: false, error: 'Session expired or invalid' }); }
-}
-
-async function requireAdmin(req, res, next) {
-  try { const user = await getUser(req.user.sub); if (user.role !== 'admin') return res.status(403).json({ ok: false, error: 'Group admin access is required' }); next(); }
-  catch (error) { next(error); }
-}
-
-function buildDashboard(valueRanges) {
-  const members = (valueRanges[0]?.values || []).map(row => ({ memberId: row[1], name: row[2], goal: Number(row[3] || 10000), active: String(row[5]).toLowerCase() !== 'false' }));
-  const rows = valueRanges[1]?.values || [];
-  const dates = lastDates(7);
-  const latest = new Map();
-  for (const row of rows) {
-    const date = String(row[3] || ''), memberId = String(row[2] || '');
-    if (!dates.includes(date) || !memberId) continue;
-    const key = `${date}:${memberId}`, previous = latest.get(key);
-    if (!previous || String(row[6]) > String(previous[6])) latest.set(key, row);
-  }
-  const today = dates.at(-1);
-  return {
-    generatedAt: new Date().toISOString(), date: today,
-    members: members.filter(member => member.active).map(member => { const row = latest.get(`${today}:${member.memberId}`); return { ...member, steps: Number(row?.[4] || 0), syncedAt: row?.[7] || row?.[6] || null }; }),
-    trend: dates.map(date => ({ date, steps: members.reduce((sum, member) => sum + Number(latest.get(`${date}:${member.memberId}`)?.[4] || 0), 0) }))
-  };
-}
-
+function buildDashboard(valueRanges) { const members = (valueRanges[0]?.values || []).map(row => ({ memberId: row[1], name: row[2], goal: Number(row[3] || 10000), active: String(row[5]).toLowerCase() !== 'false' })); const rows = valueRanges[1]?.values || []; const dates = lastDates(7); const latest = new Map(); for (const row of rows) { const date = String(row[3] || ''), memberId = String(row[2] || ''); if (!dates.includes(date) || !memberId) continue; const key = `${date}:${memberId}`, previous = latest.get(key); if (!previous || String(row[6]) > String(previous[6])) latest.set(key, row); } const today = dates.at(-1); return { generatedAt: new Date().toISOString(), date: today, members: members.filter(member => member.active).map(member => { const row = latest.get(`${today}:${member.memberId}`); return { ...member, steps: Number(row?.[4] || 0), syncedAt: row?.[7] || row?.[6] || null }; }), trend: dates.map(date => ({ date, steps: members.reduce((sum, member) => sum + Number(latest.get(`${date}:${member.memberId}`)?.[4] || 0), 0) })) }; }
 function buildProjects(rows) { return rows.filter(row => String(row[6] || 'active') !== 'archived').map(row => ({ projectId: row[0], name: row[1], type: row[2], sheetTitle: row[3], createdBy: row[4], createdAt: row[5], status: row[6] || 'active' })); }
 function buildProjectEntries(project, rows) { return project.sheetTitle === 'Steps' ? rows.map(row => ({ entryId: row[0], memberEmail: row[2], date: row[3], value: Number(row[4] || 0), notes: row[5], updatedAt: row[7] || row[6] })) : rows.map(row => ({ entryId: row[0], memberEmail: row[1], date: row[2], value: Number(row[3] || 0), notes: row[4], createdBy: row[5], updatedAt: row[6] })); }
 function uniqueSheetTitle(name, existingTitles) { const base = String(name).replace(/[\\/?*[\]:]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Project'; let title = base, counter = 2; while (existingTitles.has(title)) title = `${base.slice(0, 75)} ${counter++}`; return title; }
@@ -359,14 +271,8 @@ function normalizeEmail(value) { return String(value || '').trim().toLowerCase()
 function isValidEmail(value) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
 function validDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')); }
 function lastDates(count) { const dates = []; for (let offset = count - 1; offset >= 0; offset--) { const date = new Date(); date.setUTCDate(date.getUTCDate() - offset); dates.push(date.toISOString().slice(0, 10)); } return dates; }
-function redirectWithError(res, message) { const redirect = new URL(process.env.APP_ORIGIN); redirect.hash = new URLSearchParams({ oauth_error: message }).toString(); return res.redirect(redirect.toString()); }
+function redirectWithError(res, message) { const redirect = new URL(appOrigin); redirect.hash = new URLSearchParams({ oauth_error: message }).toString(); return res.redirect(redirect.toString()); }
 function readableError(error) { return error?.response?.data?.error?.message || error?.response?.data?.error_description || error?.message || 'Unexpected sign-in error'; }
 
-app.use((error, _req, res, _next) => {
-  console.error(error);
-  const candidate = Number(error?.statusCode || error?.response?.status || 500);
-  const status = candidate >= 400 && candidate <= 599 ? candidate : 500;
-  res.status(status).json({ ok: false, error: readableError(error) });
-});
-
+app.use((error, _req, res, _next) => { console.error(error); const candidate = Number(error?.statusCode || error?.response?.status || 500); const status = candidate >= 400 && candidate <= 599 ? candidate : 500; res.status(status).json({ ok: false, error: readableError(error) }); });
 app.listen(process.env.PORT || 8080, () => console.log('Track Everything API started'));
