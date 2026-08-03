@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Track Everything shared group dashboard" />
-  <title>Track Everything — Group Hub</title>
+  <meta name="description" content="Create shared projects, invite members, and track progress in one Google Sheet." />
+  <title>Track Everything — Shared Progress Hub</title>
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="config.js"></script>
   <script src="assets/app.js" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <div><p class="eyebrow">TRACK EVERYTHING</p><h1>Group Hub</h1><p class="subtitle">One shared Google Sheet for members, projects, and progress.</p></div>
+    <div><p class="eyebrow">TRACK EVERYTHING</p><h1>Shared Progress Hub</h1><p class="subtitle">Create a group, invite people, start projects, and track progress in one shared Google Sheet.</p></div>
     <div class="account-actions">
       <a id="sheetLink" class="secondary-button" href="#" target="_blank" rel="noreferrer" hidden>Open Sheet</a>
       <button id="refreshButton" class="secondary-button" type="button" hidden>Refresh</button>
@@ -21,7 +21,11 @@
 
   <main>
     <section id="authPanel" class="panel auth-panel">
-      <div><p class="eyebrow">GET STARTED</p><h2>Connect your Google account</h2><p class="subtitle">Admins create a shared Sheet. Approved members sign in with their invited Google email and update the same group data.</p></div>
+      <div>
+        <p class="eyebrow">GET STARTED</p><h2>Continue with Google</h2>
+        <p class="subtitle">Track Everything only requests access to files created or opened through this app. New users can create a group; invited users join the admin’s shared workspace.</p>
+        <p id="oauthMessage" class="form-message" aria-live="polite"></p>
+      </div>
       <button id="loginButton" class="primary-button" type="button">Continue with Google</button>
     </section>
 
@@ -31,7 +35,7 @@
     </section>
 
     <div id="dashboard" hidden>
-      <section class="summary-grid" aria-label="Step summary">
+      <section class="summary-grid" aria-label="Progress summary">
         <article class="metric-card featured"><span>Group steps today</span><strong id="familySteps">—</strong><small id="familyGoalProgress">Waiting for data</small></article>
         <article class="metric-card"><span>Members active</span><strong id="activeMembers">—</strong><small>approved group members</small></article>
         <article class="metric-card"><span>Goals reached</span><strong id="goalsReached">—</strong><small>individual daily targets</small></article>
@@ -39,34 +43,36 @@
       </section>
 
       <section class="workspace-grid">
-        <article class="panel">
-          <div class="panel-heading"><div><p class="eyebrow">STEP TRACKING</p><h2>Record today’s steps</h2></div></div>
-          <form id="stepForm" class="stack-form">
-            <label>Steps<input id="stepInput" type="number" min="0" max="200000" required placeholder="6500" /></label>
-            <label>Date<input id="stepDate" type="date" required /></label>
-            <button class="primary-button" type="submit">Save steps</button>
-            <p id="stepMessage" class="form-message" aria-live="polite"></p>
-          </form>
-        </article>
-
         <article id="adminPanel" class="panel" hidden>
           <div class="panel-heading"><div><p class="eyebrow">ADMIN</p><h2>Add a group member</h2></div></div>
           <form id="memberForm" class="stack-form">
             <label>Google email<input id="memberEmail" type="email" required placeholder="member@gmail.com" /></label>
-            <label>Name<input id="memberName" type="text" maxlength="100" placeholder="Family member" /></label>
+            <label>Name<input id="memberName" type="text" maxlength="100" placeholder="Member name" /></label>
             <label>Daily step goal<input id="memberGoal" type="number" min="1" max="100000" value="10000" required /></label>
-            <button class="primary-button" type="submit">Add member</button>
+            <button class="primary-button" type="submit">Add and share Sheet</button>
             <p id="memberMessage" class="form-message" aria-live="polite"></p>
           </form>
         </article>
 
         <article class="panel">
-          <div class="panel-heading"><div><p class="eyebrow">PROJECTS</p><h2>Create a worksheet project</h2></div></div>
+          <div class="panel-heading"><div><p class="eyebrow">PROJECTS</p><h2>Create a project</h2></div></div>
           <form id="projectForm" class="stack-form">
             <label>Project name<input id="projectName" type="text" maxlength="60" required placeholder="30-Day Walking Challenge" /></label>
-            <label>Project type<select id="projectType"><option value="general">General progress</option><option value="steps">Step tracking</option></select></label>
+            <label>Tracking method<select id="projectType"><option value="general">General numeric progress</option><option value="steps">Steps</option><option value="percentage">Percentage</option><option value="count">Count</option></select></label>
             <button class="primary-button" type="submit">Create project page</button>
             <p id="projectMessage" class="form-message" aria-live="polite"></p>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h2>Add a progress update</h2></div></div>
+          <form id="progressForm" class="stack-form">
+            <label>Project<select id="progressProject" required><option value="">Select a project</option></select></label>
+            <label>Value<input id="progressValue" type="number" min="0" step="any" required placeholder="6500" /></label>
+            <label>Date<input id="progressDate" type="date" required /></label>
+            <label>Notes<textarea id="progressNotes" maxlength="500" rows="3" placeholder="Optional update"></textarea></label>
+            <button class="primary-button" type="submit">Save progress</button>
+            <p id="progressMessage" class="form-message" aria-live="polite"></p>
           </form>
         </article>
       </section>
@@ -77,18 +83,26 @@
       </section>
 
       <section class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">TODAY</p><h2>Member progress</h2></div></div>
+        <div class="panel-heading"><div><p class="eyebrow">RECENT UPDATES</p><h2 id="entriesTitle">Select a project</h2></div></div>
+        <div id="entriesTable" class="entries-table"><p class="empty-state">Choose a project to view recent progress.</p></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">STEP TRACKING</p><h2>Today’s member progress</h2></div></div>
         <div id="memberGrid" class="member-grid" aria-live="polite"></div>
         <p id="emptyState" class="empty-state" hidden>No step data is available yet.</p>
       </section>
 
       <section class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">7-DAY VIEW</p><h2>Group trend</h2></div></div>
+        <div class="panel-heading"><div><p class="eyebrow">7-DAY VIEW</p><h2>Group step trend</h2></div></div>
         <div id="trendChart" class="trend-chart" role="img" aria-label="Seven-day group step trend"></div>
       </section>
     </div>
   </main>
 
-  <footer><p>The Sheet remains in the group admin’s Google Drive. Members use this app to access only the group data they are approved to update.</p></footer>
+  <footer>
+    <p>The group Sheet remains in the admin’s Google Drive and is shared only with approved members.</p>
+    <nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav>
+  </footer>
 </body>
 </html>
