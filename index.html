@@ -4,7 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Create shared projects, invite members, and track progress in one Google Sheet." />
+  <meta name="theme-color" content="#17211c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Track Everything" />
   <title>Track Everything — Shared Progress Hub</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/icon-192.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-192.svg" />
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="config.js"></script>
   <script src="assets/app.js" defer></script>
@@ -13,6 +20,8 @@
   <header class="topbar">
     <div><p class="eyebrow">TRACK EVERYTHING</p><h1>Shared Progress Hub</h1><p class="subtitle">Create a group, invite people, start projects, and track progress in one shared Google Sheet.</p></div>
     <div class="account-actions">
+      <span id="networkStatus" class="status-badge">Online</span>
+      <button id="installButton" class="primary-button" type="button" hidden>Install app</button>
       <a id="sheetLink" class="secondary-button" href="#" target="_blank" rel="noreferrer" hidden>Open Sheet</a>
       <button id="refreshButton" class="secondary-button" type="button" hidden>Refresh</button>
       <button id="logoutButton" class="secondary-button" type="button" hidden>Sign out</button>
@@ -42,6 +51,19 @@
         <article class="metric-card"><span>Projects</span><strong id="projectCount">—</strong><small>shared worksheet pages</small></article>
       </section>
 
+      <section id="device-health" class="panel health-panel">
+        <div>
+          <p class="eyebrow">DEVICE HEALTH</p>
+          <h2>Sync steps through a thin native connector</h2>
+          <p class="subtitle">The installed PWA handles projects, members, dashboards, and manual updates. Android Health Connect and Apple Health remain protected native APIs, so step syncing is provided by a small companion connector.</p>
+        </div>
+        <div class="health-options">
+          <article class="health-option"><strong>Android</strong><p>Health Connect connector is available in the repository for testing. It reads only aggregated step totals.</p><span class="status-badge">Prototype ready</span></article>
+          <article class="health-option"><strong>iPhone</strong><p>A thin HealthKit connector will use the same backend sync contract without rebuilding the dashboard.</p><span class="status-badge">Next phase</span></article>
+        </div>
+        <p class="member-meta">Install this PWA now for the shared experience. Health access is never requested by the browser.</p>
+      </section>
+
       <section class="workspace-grid">
         <article id="adminPanel" class="panel" hidden>
           <div class="panel-heading"><div><p class="eyebrow">ADMIN</p><h2>Add a group member</h2></div></div>
@@ -64,7 +86,7 @@
           </form>
         </article>
 
-        <article class="panel">
+        <article id="progress" class="panel">
           <div class="panel-heading"><div><p class="eyebrow">PROGRESS</p><h2>Add a progress update</h2></div></div>
           <form id="progressForm" class="stack-form">
             <label>Project<select id="progressProject" required><option value="">Select a project</option></select></label>
@@ -77,32 +99,13 @@
         </article>
       </section>
 
-      <section class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">PROJECT PAGES</p><h2>Shared projects</h2></div><span id="statusBadge" class="status-badge">Loading</span></div>
-        <div id="projectGrid" class="project-grid"></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">RECENT UPDATES</p><h2 id="entriesTitle">Select a project</h2></div></div>
-        <div id="entriesTable" class="entries-table"><p class="empty-state">Choose a project to view recent progress.</p></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">STEP TRACKING</p><h2>Today’s member progress</h2></div></div>
-        <div id="memberGrid" class="member-grid" aria-live="polite"></div>
-        <p id="emptyState" class="empty-state" hidden>No step data is available yet.</p>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">7-DAY VIEW</p><h2>Group step trend</h2></div></div>
-        <div id="trendChart" class="trend-chart" role="img" aria-label="Seven-day group step trend"></div>
-      </section>
+      <section class="panel"><div class="panel-heading"><div><p class="eyebrow">PROJECT PAGES</p><h2>Shared projects</h2></div><span id="statusBadge" class="status-badge">Loading</span></div><div id="projectGrid" class="project-grid"></div></section>
+      <section class="panel"><div class="panel-heading"><div><p class="eyebrow">RECENT UPDATES</p><h2 id="entriesTitle">Select a project</h2></div></div><div id="entriesTable" class="entries-table"><p class="empty-state">Choose a project to view recent progress.</p></div></section>
+      <section class="panel"><div class="panel-heading"><div><p class="eyebrow">STEP TRACKING</p><h2>Today’s member progress</h2></div></div><div id="memberGrid" class="member-grid" aria-live="polite"></div><p id="emptyState" class="empty-state" hidden>No step data is available yet.</p></section>
+      <section class="panel"><div class="panel-heading"><div><p class="eyebrow">7-DAY VIEW</p><h2>Group step trend</h2></div></div><div id="trendChart" class="trend-chart" role="img" aria-label="Seven-day group step trend"></div></section>
     </div>
   </main>
 
-  <footer>
-    <p>The group Sheet remains in the admin’s Google Drive and is shared only with approved members.</p>
-    <nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav>
-  </footer>
+  <footer><p>The group Sheet remains in the admin’s Google Drive and is shared only with approved members.</p><nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav></footer>
 </body>
 </html>
