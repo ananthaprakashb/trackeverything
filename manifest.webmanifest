@@ -1,0 +1,36 @@
+{
+  "name": "Track Everything",
+  "short_name": "Track",
+  "description": "Create shared projects, invite members, and track progress together.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f6f4",
+  "theme_color": "#17211c",
+  "icons": [
+    {
+      "src": "/assets/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add progress",
+      "short_name": "Progress",
+      "url": "/#progress"
+    },
+    {
+      "name": "Device health",
+      "short_name": "Health",
+      "url": "/#device-health"
+    }
+  ]
+}
