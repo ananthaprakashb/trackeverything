@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Track Everything",
+    "slug": "track-everything",
+    "scheme": "trackeverything",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.sharecapsule.trackeverything",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Track Everything reads your daily step total so you can share progress with your approved group.",
+        "NSHealthUpdateUsageDescription": "Track Everything does not write health data."
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.background-delivery": true
+      }
+    },
+    "android": {
+      "package": "app.sharecapsule.trackeverything",
+      "permissions": [
+        "android.permission.health.READ_STEPS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "trackeverything.sharecapsule.app",
+              "pathPrefix": "/mobile"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "apiUrl": "https://track-everything-api-854374277452.us-west1.run.app"
+    }
+  }
+}
