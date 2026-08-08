@@ -21,13 +21,32 @@ button:disabled { opacity:.55; cursor:wait; }
 .auth-panel { display:flex; align-items:center; justify-content:space-between; gap:28px; padding:36px; }
 .user-panel { display:flex; align-items:center; gap:16px; }
 .avatar { width:58px; height:58px; border-radius:50%; object-fit:cover; border:3px solid var(--accent-soft); }
+.community-hero { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr); gap:28px; align-items:center; background:linear-gradient(135deg,#17211c 0%,#244a38 100%); color:#fff; }
+.community-hero .eyebrow { color:#94d8b4; }
+.community-hero .subtitle { color:#c9d8d0; }
+.quick-steps-form { display:grid; grid-template-columns:1fr 150px; gap:12px; padding:18px; border-radius:18px; background:rgba(255,255,255,.08); }
+.quick-steps-form label { display:grid; gap:7px; color:#d8e5de; font-size:.82rem; font-weight:800; }
+.quick-steps-form input { width:100%; min-width:0; border:1px solid rgba(255,255,255,.18); border-radius:12px; padding:13px 14px; background:#fff; color:var(--text); font-size:1rem; }
+.quick-steps-form #quickSteps { font-size:1.35rem; font-weight:850; }
+.quick-steps-form .primary-button { grid-column:1/-1; background:#fff; color:var(--text); }
+.quick-steps-form .primary-button:hover { background:var(--accent-soft); }
+.quick-steps-form .form-message { grid-column:1/-1; color:#b9edcf; }
+.quick-steps-form .form-message.error { color:#ffd0cc; }
 .summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:18px; }
 .metric-card { padding:22px; }
 .metric-card span,.metric-card small { color:var(--muted); }
 .metric-card strong { display:block; margin:12px 0 8px; font-size:clamp(1.8rem,4vw,2.6rem); letter-spacing:-.05em; }
 .metric-card.featured { background:var(--text); color:#fff; }
 .metric-card.featured span,.metric-card.featured small { color:#b9c9c0; }
+.community-guide { display:grid; gap:22px; }
+.guide-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.guide-grid article { border:1px solid var(--line); border-radius:18px; padding:20px; background:var(--surface); }
+.guide-grid article > strong { display:grid; place-items:center; width:34px; height:34px; margin-bottom:18px; border-radius:50%; background:var(--accent-soft); color:var(--accent); }
+.guide-grid h3 { margin-bottom:8px; }
+.guide-grid p { margin-bottom:0; color:var(--muted); line-height:1.5; font-size:.9rem; }
 .workspace-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; align-items:start; }
+.community-admin-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.community-admin-grid #progress { grid-column:1/-1; }
 .panel-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:24px; }
 .stack-form { display:grid; gap:14px; }
 .stack-form label { display:grid; gap:7px; color:var(--muted); font-size:.85rem; font-weight:700; }
@@ -35,18 +54,23 @@ button:disabled { opacity:.55; cursor:wait; }
 .stack-form input:focus,.stack-form select:focus,.stack-form textarea:focus { outline:2px solid var(--accent-soft); border-color:var(--accent); }
 .form-message { min-height:1.2em; margin:0; color:var(--accent); font-size:.82rem; }
 .form-message.error { color:#a62e27; }
+.share-box { margin-top:22px; padding-top:20px; border-top:1px solid var(--line); }
+.share-box p:not(.eyebrow) { color:var(--muted); line-height:1.5; font-size:.9rem; }
 .status-badge { border-radius:999px; padding:7px 11px; background:var(--accent-soft); color:var(--accent); font-size:.8rem; font-weight:800; }
 .status-badge.error { background:#fde5e4; color:#a62e27; }
 .member-grid,.project-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
 .member-card,.project-card { border:1px solid var(--line); border-radius:18px; padding:18px; background:var(--surface); text-align:left; }
+.member-card:first-child { border-color:#b8dfc9; box-shadow:0 10px 28px rgba(31,122,82,.08); }
 .project-button { cursor:pointer; color:inherit; }
 .project-button:hover { border-color:var(--accent); transform:translateY(-1px); }
 .member-row { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
 .member-card h3,.project-card h3 { margin:0; font-size:1rem; }
+.rank { color:var(--accent); font-size:.72rem; }
 .member-steps { margin:18px 0 13px; font-size:2rem; font-weight:850; letter-spacing:-.05em; }
 .member-meta { color:var(--muted); font-size:.8rem; }
 .progress-track { height:9px; overflow:hidden; border-radius:999px; background:#edf2ef; }
 .progress-bar { height:100%; border-radius:inherit; background:var(--accent); }
+.secondary-workspace { opacity:.92; }
 .entries-table { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; }
 th,td { padding:12px; border-bottom:1px solid var(--line); text-align:left; font-size:.88rem; }
@@ -64,5 +88,5 @@ footer a { color:var(--accent); }
 .legal-page { max-width:800px; }
 .legal-page h2 { margin-top:28px; margin-bottom:8px; }
 .legal-page p,.legal-page li { color:var(--muted); line-height:1.65; }
-@media (max-width:900px) { .summary-grid { grid-template-columns:repeat(2,1fr); } .workspace-grid { grid-template-columns:1fr 1fr; } .member-grid,.project-grid { grid-template-columns:1fr 1fr; } }
-@media (max-width:620px) { .topbar,.auth-panel,footer { align-items:flex-start; flex-direction:column; } .account-actions { justify-content:flex-start; } .summary-grid,.workspace-grid,.member-grid,.project-grid { grid-template-columns:1fr; } .panel { padding:20px; } .trend-chart { gap:7px; min-height:190px; } .trend-column { height:190px; } .trend-value { display:none; } }
+@media (max-width:900px) { .community-hero { grid-template-columns:1fr; } .summary-grid { grid-template-columns:repeat(2,1fr); } .workspace-grid,.community-admin-grid { grid-template-columns:1fr 1fr; } .community-admin-grid #progress { grid-column:1/-1; } .member-grid,.project-grid { grid-template-columns:1fr 1fr; } }
+@media (max-width:620px) { .topbar,.auth-panel,footer { align-items:flex-start; flex-direction:column; } .account-actions { justify-content:flex-start; } .community-hero { padding:22px; } .quick-steps-form { grid-template-columns:1fr; padding:14px; } .quick-steps-form .primary-button,.quick-steps-form .form-message { grid-column:auto; } .summary-grid,.workspace-grid,.community-admin-grid,.member-grid,.project-grid,.guide-grid { grid-template-columns:1fr; } .community-admin-grid #progress { grid-column:auto; } .panel { padding:20px; } .trend-chart { gap:7px; min-height:190px; } .trend-column { height:190px; } .trend-value { display:none; } }
