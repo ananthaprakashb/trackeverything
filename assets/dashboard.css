@@ -1,0 +1,30 @@
+.dashboard-topbar h1 { font-size:clamp(2.2rem,6vw,4.5rem); }
+.dashboard-control-panel { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; }
+.dashboard-date-label { display:grid; gap:7px; min-width:180px; color:var(--muted); font-size:.8rem; font-weight:800; }
+.dashboard-date-label input { width:100%; border:1px solid var(--line); border-radius:12px; padding:11px 12px; background:#fff; color:var(--text); }
+.dashboard-summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:18px; }
+.champion-stage { overflow:hidden; }
+.group-progress-track { height:13px; margin:-4px 0 24px; overflow:hidden; border-radius:999px; background:#edf2ef; }
+.group-progress-track span { display:block; width:0; height:100%; border-radius:inherit; background:linear-gradient(90deg,#1f7a52,#67b98d); transition:width .25s ease; }
+.champion-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.champion-card { position:relative; display:grid; gap:16px; border:1px solid var(--line); border-radius:22px; padding:20px; background:#fff; box-shadow:0 10px 30px rgba(26,54,40,.05); }
+.champion-card.is-champion { border-color:#dcc573; background:linear-gradient(180deg,#fffdf3,#fff); box-shadow:0 14px 34px rgba(145,111,16,.12); }
+.champion-card-header { display:flex; align-items:center; gap:13px; min-width:0; }
+.champion-avatar,.champion-avatar-fallback { flex:0 0 58px; width:58px; height:58px; border-radius:50%; border:3px solid var(--accent-soft); object-fit:cover; background:#edf4f0; }
+.champion-avatar-fallback { display:grid; place-items:center; color:var(--accent); font-size:1rem; font-weight:900; }
+.champion-card.is-champion .champion-avatar,.champion-card.is-champion .champion-avatar-fallback { border-color:#e4cd72; }
+.champion-person { min-width:0; flex:1; }
+.champion-person h3 { margin:0 0 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1.05rem; }
+.champion-person p { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:.77rem; }
+.champion-badge { display:inline-flex; align-items:center; gap:6px; width:max-content; border:1px solid #e4cf80; border-radius:999px; padding:6px 9px; background:#fff6c9; color:#795d00; font-size:.72rem; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+.champion-badge .trophy { font-size:.95rem; }
+.member-completion-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.member-completion-row strong { font-size:1.45rem; letter-spacing:-.04em; }
+.member-completion-row span { color:var(--muted); font-size:.8rem; }
+.completed-activities { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
+.completed-activities li { display:flex; align-items:flex-start; gap:8px; color:#334139; font-size:.85rem; line-height:1.4; }
+.completed-activities li::before { content:'✓'; display:grid; place-items:center; flex:0 0 20px; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-size:.7rem; font-weight:900; }
+.completed-activities-empty { color:var(--muted); font-size:.84rem; }
+.champion-card .progress-track { height:8px; }
+@media (max-width:960px) { .dashboard-summary-grid { grid-template-columns:repeat(2,1fr); } .champion-grid { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:620px) { .dashboard-control-panel { align-items:stretch; flex-direction:column; } .dashboard-date-label { width:100%; } .dashboard-summary-grid,.champion-grid { grid-template-columns:1fr; } .champion-card { padding:17px; } }
