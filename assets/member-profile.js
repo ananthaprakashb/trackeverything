@@ -3,6 +3,7 @@
   const SESSION_KEY = 'trackEverythingSession';
   const TASK_PROJECT_NAME = 'Daily Checklist';
   const PROFILE_PREFIX = 'TE_MEMBER_PROFILE:';
+  let syncing = false;
 
   function api(path) {
     if (!config.apiUrl) return '';
@@ -34,38 +35,48 @@
 
   async function syncProfile() {
     const session = sessionStorage.getItem(SESSION_KEY) || '';
-    if (!session) return;
-
+    if (!session || syncing) return false;
+    syncing = true;
     try {
       const [user, dashboard] = await Promise.all([request('/api/me'), request('/api/dashboard')]);
-      if (!user?.email || !dashboard) return;
+      if (!user?.email || !dashboard) return false;
       const project = (dashboard.projects || []).find(item => String(item.name || '').trim().toLowerCase() === TASK_PROJECT_NAME.toLowerCase());
-      if (!project?.projectId) return;
+      if (!project?.projectId) return false;
 
       const projectData = await request(`/api/projects/${encodeURIComponent(project.projectId)}/entries`);
       const entries = Array.isArray(projectData?.entries) ? projectData.entries : [];
       const email = String(user.email).toLowerCase();
-      const latest = [...entries].reverse().map(entry => ({ entry, profile: parseProfile(entry.notes) })).find(item => String(item.profile?.e || '').toLowerCase() === email)?.profile;
+      const latest = [...entries].reverse().map(entry => parseProfile(entry.notes)).find(profile => String(profile?.e || '').toLowerCase() === email);
       const next = {
         e: email,
         n: String(user.name || email).slice(0, 100),
         p: String(user.picture || '').slice(0, 350)
       };
 
-      if (latest && latest.n === next.n && latest.p === next.p) return;
+      if (latest && latest.n === next.n && latest.p === next.p) return true;
       const note = PROFILE_PREFIX + JSON.stringify(next);
-      if (note.length > 500) return;
+      if (note.length > 500) return false;
 
       await request(`/api/projects/${encodeURIComponent(project.projectId)}/entries`, {
         method: 'POST',
         body: JSON.stringify({ value: 0, date: localDateString(), notes: note })
       });
+      return true;
     } catch (error) {
       console.warn('Unable to sync member profile metadata', error);
+      return false;
+    } finally {
+      syncing = false;
     }
   }
 
-  window.addEventListener('load', () => {
-    setTimeout(syncProfile, 1200);
+  function scheduleSyncs() {
+    [800, 2500, 6500].forEach(delay => setTimeout(syncProfile, delay));
+  }
+
+  scheduleSyncs();
+  window.addEventListener('pageshow', scheduleSyncs);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') setTimeout(syncProfile, 500);
   });
 })();
