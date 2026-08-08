@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Join a shared community activity, update your daily steps, and follow the group together." />
+  <meta name="description" content="Join a shared community activity, update daily steps, complete assigned tasks, and follow the group together." />
   <meta name="theme-color" content="#17211c" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -15,13 +15,14 @@
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="config.js"></script>
   <script src="assets/app.js" defer></script>
+  <script src="assets/pwa.js" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div>
       <p class="eyebrow">TRACK EVERYTHING</p>
       <h1>Community Activity</h1>
-      <p class="subtitle">A simple shared space for friends to participate, update daily progress, and encourage one another.</p>
+      <p class="subtitle">A simple shared space for friends to complete daily tasks, update progress, and encourage one another.</p>
     </div>
     <div class="account-actions">
       <span id="networkStatus" class="status-badge">Online</span>
@@ -37,7 +38,7 @@
       <div>
         <p class="eyebrow">JOIN THE ACTIVITY</p>
         <h2>Continue with Google</h2>
-        <p class="subtitle">If a friend invited you, sign in with the same Google email address they added to the activity. Your progress will appear with the rest of the community.</p>
+        <p class="subtitle">If a friend invited you, sign in with the same Google email address they added to the activity. Your daily tasks and progress will appear with the rest of the community.</p>
         <p id="oauthMessage" class="form-message" aria-live="polite"></p>
       </div>
       <button id="loginButton" class="primary-button" type="button">Continue with Google</button>
@@ -54,9 +55,29 @@
     </section>
 
     <div id="dashboard" hidden>
+      <section id="daily-checklist" class="panel daily-task-panel">
+        <div class="panel-heading daily-task-heading">
+          <div>
+            <p class="eyebrow">DAILY CHECKLIST</p>
+            <h2>Today's assigned tasks</h2>
+            <p class="subtitle">Check each task when you finish it. Choose another date to review previous completion.</p>
+          </div>
+          <div class="task-date-controls">
+            <label>Date<input id="taskDate" type="date" /></label>
+            <span id="taskProgressBadge" class="status-badge">0/0 complete</span>
+          </div>
+        </div>
+        <div id="dailyTaskList" class="daily-task-list" aria-live="polite"><p class="empty-state">Loading your assigned tasks…</p></div>
+        <p id="taskMessage" class="form-message" aria-live="polite"></p>
+        <div class="task-community-summary">
+          <div class="panel-heading compact-heading"><div><p class="eyebrow">GROUP COMPLETION</p><h3>Daily task progress by participant</h3></div></div>
+          <div id="taskMemberGrid" class="task-member-grid"></div>
+        </div>
+      </section>
+
       <section id="quick-update" class="panel community-hero">
         <div>
-          <p class="eyebrow">TODAY'S UPDATE</p>
+          <p class="eyebrow">TODAY'S STEPS</p>
           <h2>How many steps have you completed today?</h2>
           <p class="subtitle">Check the step count on your phone or watch and enter the current total. You can update it again later in the day.</p>
         </div>
@@ -76,14 +97,11 @@
       </section>
 
       <section id="community-guide" class="panel community-guide">
-        <div>
-          <p class="eyebrow">HOW IT WORKS</p>
-          <h2>Three simple steps for every participant</h2>
-        </div>
+        <div><p class="eyebrow">HOW IT WORKS</p><h2>Three simple steps for every participant</h2></div>
         <div class="guide-grid">
           <article><strong>1</strong><h3>Sign in</h3><p>Use the Google email address the organizer added.</p></article>
-          <article><strong>2</strong><h3>Check your steps</h3><p>Use Apple Health, Samsung Health, Fitbit, Garmin, or your usual phone/watch app.</p></article>
-          <article><strong>3</strong><h3>Update here</h3><p>Enter the current daily total. The community dashboard updates for everyone.</p></article>
+          <article><strong>2</strong><h3>Complete today's checklist</h3><p>Check each assigned task as you finish it. Completion is stored separately for every day.</p></article>
+          <article><strong>3</strong><h3>Update your steps</h3><p>Use Apple Health, Samsung Health, Fitbit, Garmin, or your usual phone/watch app and enter your current total.</p></article>
         </div>
       </section>
 
@@ -91,9 +109,7 @@
         <article id="adminPanel" class="panel" hidden>
           <div class="panel-heading"><div><p class="eyebrow">ORGANIZER</p><h2>Add friends</h2></div></div>
           <form id="memberForm" class="stack-form">
-            <label>Google emails
-              <textarea id="memberEmail" rows="6" required placeholder="friend1@gmail.com&#10;friend2@gmail.com&#10;friend3@gmail.com"></textarea>
-            </label>
+            <label>Google emails<textarea id="memberEmail" rows="6" required placeholder="friend1@gmail.com&#10;friend2@gmail.com&#10;friend3@gmail.com"></textarea></label>
             <label>Daily step goal<input id="memberGoal" type="number" min="1" max="100000" value="10000" required /></label>
             <button class="primary-button" type="submit">Add participants</button>
             <p class="member-meta">Paste one email per line, or separate addresses with commas. Existing participants are safely skipped.</p>
@@ -103,6 +119,27 @@
             <p class="eyebrow">SHARE WITH FRIENDS</p>
             <p>After adding their email, send them the Track Everything site and ask them to sign in with that same Google account.</p>
             <button id="copyInstructionsButton" class="secondary-button" type="button">Copy participant instructions</button>
+          </div>
+        </article>
+
+        <article id="taskAdminPanel" class="panel" hidden>
+          <div class="panel-heading"><div><p class="eyebrow">ORGANIZER · SHARECAPSULE</p><h2>Assign a daily checklist</h2></div></div>
+          <form id="taskTemplateForm" class="stack-form">
+            <label>Checklist template<select id="taskTemplateSelect"><option value="">Loading ShareCapsule templates…</option></select></label>
+            <label>Start date<input id="taskStartDate" type="date" required /></label>
+            <label>Assign to<select id="taskAssignmentMode"><option value="all">Everyone in this activity</option><option value="selected">Selected participants</option></select></label>
+            <div id="taskAssigneeList" class="task-assignee-list" hidden></div>
+            <button class="primary-button" type="submit">Assign checklist</button>
+            <p id="taskTemplateMessage" class="form-message" aria-live="polite"></p>
+          </form>
+          <div class="custom-task-box">
+            <p class="eyebrow">QUICK TASK</p>
+            <form id="customTaskForm" class="stack-form compact-form">
+              <label>Task<input id="customTaskTitle" maxlength="180" placeholder="Drink 8 glasses of water" required /></label>
+              <label>Priority<select id="customTaskPriority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option><option value="none">None</option></select></label>
+              <button class="secondary-button" type="submit">Add daily task</button>
+              <p id="customTaskMessage" class="form-message" aria-live="polite"></p>
+            </form>
           </div>
         </article>
 
@@ -135,26 +172,12 @@
         <p id="emptyState" class="empty-state" hidden>No step data is available yet.</p>
       </section>
 
-      <section class="panel">
-        <div class="panel-heading"><div><p class="eyebrow">7-DAY VIEW</p><h2>Community step trend</h2></div></div>
-        <div id="trendChart" class="trend-chart" role="img" aria-label="Seven-day community step trend"></div>
-      </section>
-
-      <section class="panel secondary-workspace">
-        <div class="panel-heading"><div><p class="eyebrow">ACTIVITIES</p><h2>Shared activity pages</h2></div></div>
-        <div id="projectGrid" class="project-grid"></div>
-      </section>
-
-      <section class="panel secondary-workspace">
-        <div class="panel-heading"><div><p class="eyebrow">RECENT UPDATES</p><h2 id="entriesTitle">Select an activity</h2></div></div>
-        <div id="entriesTable" class="entries-table"><p class="empty-state">Choose an activity to view recent progress.</p></div>
-      </section>
+      <section class="panel"><div class="panel-heading"><div><p class="eyebrow">7-DAY VIEW</p><h2>Community step trend</h2></div></div><div id="trendChart" class="trend-chart" role="img" aria-label="Seven-day community step trend"></div></section>
+      <section class="panel secondary-workspace"><div class="panel-heading"><div><p class="eyebrow">ACTIVITIES</p><h2>Shared activity pages</h2></div></div><div id="projectGrid" class="project-grid"></div></section>
+      <section class="panel secondary-workspace"><div class="panel-heading"><div><p class="eyebrow">RECENT UPDATES</p><h2 id="entriesTitle">Select an activity</h2></div></div><div id="entriesTable" class="entries-table"><p class="empty-state">Choose an activity to view recent progress.</p></div></section>
     </div>
   </main>
 
-  <footer>
-    <p>For this community activity, participants update their own progress using the Google account registered by the organizer.</p>
-    <nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav>
-  </footer>
+  <footer><p>Participants update their own daily checklist and progress using the Google account registered by the organizer.</p><nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav></footer>
 </body>
 </html>
