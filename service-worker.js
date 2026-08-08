@@ -1,13 +1,17 @@
-const CACHE_NAME = 'track-everything-community-v4';
+const CACHE_NAME = 'track-everything-community-v5';
 const APP_SHELL = [
   '/',
   '/index.html',
+  '/dashboard.html',
   '/offline.html',
   '/manifest.webmanifest',
   '/config.js',
   '/assets/styles.css',
+  '/assets/dashboard.css',
   '/assets/app.js',
   '/assets/group-admin.js',
+  '/assets/member-profile.js',
+  '/assets/dashboard.js',
   '/assets/pwa.js',
   '/assets/icon-192.svg',
   '/assets/icon-512.svg',
