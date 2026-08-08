@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Join a shared community activity, update daily steps, complete assigned tasks, and follow the group together." />
+  <meta name="description" content="Start a community group, add friends, assign daily tasks, update steps, and track completion together." />
   <meta name="theme-color" content="#17211c" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="assets/styles.css" />
   <script src="config.js"></script>
   <script src="assets/app.js" defer></script>
+  <script src="assets/group-admin.js" defer></script>
   <script src="assets/pwa.js" defer></script>
 </head>
 <body>
@@ -22,7 +23,7 @@
     <div>
       <p class="eyebrow">TRACK EVERYTHING</p>
       <h1>Community Activity</h1>
-      <p class="subtitle">A simple shared space for friends to complete daily tasks, update progress, and encourage one another.</p>
+      <p class="subtitle">Start a group, invite friends, complete daily tasks, update progress, and encourage one another.</p>
     </div>
     <div class="account-actions">
       <span id="networkStatus" class="status-badge">Online</span>
@@ -36,9 +37,9 @@
   <main>
     <section id="authPanel" class="panel auth-panel">
       <div>
-        <p class="eyebrow">JOIN THE ACTIVITY</p>
+        <p class="eyebrow">GET STARTED</p>
         <h2>Continue with Google</h2>
-        <p class="subtitle">If a friend invited you, sign in with the same Google email address they added to the activity. Your daily tasks and progress will appear with the rest of the community.</p>
+        <p class="subtitle">The first person can organize a group and add participants. Invited friends sign in with the Google email address the organizer registered for them.</p>
         <p id="oauthMessage" class="form-message" aria-live="polite"></p>
       </div>
       <button id="loginButton" class="primary-button" type="button">Continue with Google</button>
@@ -55,6 +56,30 @@
     </section>
 
     <div id="dashboard" hidden>
+      <section id="groupSetupPanel" class="panel" hidden>
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">ORGANIZER · GROUP SETUP</p>
+            <h2 id="groupSetupHeading">Start a group</h2>
+            <p id="groupSetupSummary" class="subtitle">Give the group a name and optionally add the first participants. You can add more people later.</p>
+          </div>
+        </div>
+        <form id="groupSetupForm" class="stack-form">
+          <label>Group name
+            <input id="groupSetupName" type="text" maxlength="80" required placeholder="Weekend Wellness Friends" />
+          </label>
+          <label>Add people by Google email
+            <textarea id="groupSetupEmails" rows="5" placeholder="friend1@gmail.com&#10;friend2@gmail.com&#10;friend3@gmail.com"></textarea>
+          </label>
+          <label>Daily step goal for newly added people
+            <input id="groupSetupGoal" type="number" min="1" max="100000" value="10000" required />
+          </label>
+          <button id="groupSetupSubmit" class="primary-button" type="submit">Start group</button>
+          <p class="member-meta">Enter one email per line, or separate addresses with commas. Participants must sign in with the same Google account.</p>
+          <p id="groupSetupMessage" class="form-message" aria-live="polite"></p>
+        </form>
+      </section>
+
       <section id="daily-checklist" class="panel daily-task-panel">
         <div class="panel-heading daily-task-heading">
           <div>
@@ -107,7 +132,7 @@
 
       <section class="workspace-grid community-admin-grid">
         <article id="adminPanel" class="panel" hidden>
-          <div class="panel-heading"><div><p class="eyebrow">ORGANIZER</p><h2>Add friends</h2></div></div>
+          <div class="panel-heading"><div><p class="eyebrow">ORGANIZER</p><h2>Add more people</h2></div></div>
           <form id="memberForm" class="stack-form">
             <label>Google emails<textarea id="memberEmail" rows="6" required placeholder="friend1@gmail.com&#10;friend2@gmail.com&#10;friend3@gmail.com"></textarea></label>
             <label>Daily step goal<input id="memberGoal" type="number" min="1" max="100000" value="10000" required /></label>
@@ -178,6 +203,6 @@
     </div>
   </main>
 
-  <footer><p>Participants update their own daily checklist and progress using the Google account registered by the organizer.</p><nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav></footer>
+  <footer><p>Organizers start the group, add participants, and assign tasks. Participants use the Google account registered by the organizer.</p><nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a></nav></footer>
 </body>
 </html>
