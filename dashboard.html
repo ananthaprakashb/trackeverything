@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Track community daily activity completion, celebrate champions, and review group progress." />
+  <meta name="theme-color" content="#17211c" />
+  <title>Group Progress — Track Everything</title>
+  <link rel="icon" href="assets/icon-192.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="assets/styles.css" />
+  <link rel="stylesheet" href="assets/dashboard.css" />
+  <script src="config.js"></script>
+  <script src="assets/dashboard.js" defer></script>
+</head>
+<body>
+  <header class="topbar dashboard-topbar">
+    <div>
+      <p class="eyebrow">TRACK EVERYTHING</p>
+      <h1>Group Progress</h1>
+      <p id="dashboardGroupName" class="subtitle">Daily activity completion and champions.</p>
+    </div>
+    <div class="account-actions">
+      <a class="secondary-button" href="/">← Activity</a>
+      <button id="dashboardRefresh" class="secondary-button" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="dashboardAuthRequired" class="panel auth-panel" hidden>
+      <div>
+        <p class="eyebrow">SIGN IN REQUIRED</p>
+        <h2>Open the activity and sign in first</h2>
+        <p class="subtitle">The group dashboard is available to signed-in members of this activity.</p>
+      </div>
+      <a class="primary-button" href="/">Go to activity</a>
+    </section>
+
+    <div id="groupDashboard" hidden>
+      <section class="panel dashboard-control-panel">
+        <div>
+          <p class="eyebrow">DAILY DASHBOARD</p>
+          <h2>How is the group doing?</h2>
+          <p class="subtitle">A Champion badge is earned when a member completes every activity assigned to them for the selected day.</p>
+        </div>
+        <label class="dashboard-date-label">Date<input id="dashboardDate" type="date" /></label>
+      </section>
+
+      <section class="dashboard-summary-grid" aria-label="Group task summary">
+        <article class="metric-card featured"><span>Group completion</span><strong id="groupCompletionPercent">—</strong><small id="groupCompletionDetail">Waiting for data</small></article>
+        <article class="metric-card"><span>Champions</span><strong id="championCount">—</strong><small>completed every assigned activity</small></article>
+        <article class="metric-card"><span>Activities completed</span><strong id="completedActivityCount">—</strong><small>across all members</small></article>
+        <article class="metric-card"><span>Participants</span><strong id="dashboardMemberCount">—</strong><small>members in this group</small></article>
+      </section>
+
+      <section class="panel champion-stage">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">GROUP PROGRESS</p>
+            <h2>Members and completed activities</h2>
+          </div>
+          <span id="dashboardStatus" class="status-badge">Loading</span>
+        </div>
+        <div class="group-progress-track" aria-label="Overall group activity completion"><span id="groupProgressBar"></span></div>
+        <div id="championGrid" class="champion-grid" aria-live="polite"></div>
+        <p id="dashboardEmpty" class="empty-state" hidden>No daily checklist has been assigned yet.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <p>Champion status is calculated from the latest checkmark state for each assigned activity on the selected date.</p>
+    <nav><a href="/">Community Activity</a><a href="privacy.html">Privacy</a></nav>
+  </footer>
+</body>
+</html>
